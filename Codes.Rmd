@@ -1,0 +1,28 @@
+---
+title: "Codes"
+author: "Huy Le Quang"
+date: "6/8/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+## 1. Set up in R
+
+```{r}
+## Set working directory:
+
+setwd ("G:/My Drive/IPSDS/Modern Workflow in Data Science/Assignments/Assignment-1/")
+getwd()
+
+## Load necessary packages
+
+library(tidyverse)
+library(reshape2)
+library(readr)
+library(ggplot2)
+
+```
+
