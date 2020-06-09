@@ -25,4 +25,140 @@ library(readr)
 library(ggplot2)
 
 ```
+## 2. Download and save data locally
+
+```{r}
+## Download data
+
+lookup.table.url <- "https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv?raw=true"
+
+lookup.table <- read.csv(url(lookup.table.url))
+
+
+time.series.url <- "https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv?raw=true"
+time.series <- read.csv(url(time.series.url))
+
+## Save data
+
+save(lookup.table, file = "lookup.table.RData")
+save(time.series, file = "Covid19_timeseries_global.RData")
+
+```
+
+## 3. Merge two datasets and create a long version of the data
+
+```{r}
+
+## Clean the time series dataset
+
+time.series <- time.series[-c(3, 4)] # delete unnecessary columns
+
+names(time.series)[names(time.series) == 'Country.Region'] <- 'country'
+names(time.series)[names(time.series) == 'Province.State'] <- 'state'
+
+time.series.long <- pivot_longer(data = time.series,
+                          -c(state, country),
+                          names_to = "date") # reshape to long format
+
+time.series.long$date <- as.Date(gsub("X", "", time.series.long$date), "%m.%d.%y") # change to date format
+
+## Merge two datasets
+
+names(lookup.table)[names(lookup.table) == 'Country_Region'] <- 'country'
+names(lookup.table)[names(lookup.table) == 'Province_State'] <- 'state'
+
+data_long <- full_join(time.series.long, lookup.table, by = c("state","country")) # merge two datasets
+
+data_long <- data_long %>% 
+    select(state, country, iso2, iso3, date, value, Lat,Long_, UID, code3, FIPS, Admin2, Population, everything()) %>% 
+    arrange(country)
+
+data_long <- data_long[-c(14)]
+
+data_long <- data_long %>% 
+    rename(latitude = Lat,
+           longitude = Long_,
+           population = Population,
+           country_code = iso3,
+           confirmed_cases = value)
+head(data_long)
+
+## Reshape data to wide format
+
+data_wide <- reshape(data = data_long,
+                     idvar = c("state","country"),
+                     timevar = "date",
+                     direction = "wide")
+
+## Save both datasets
+
+save(data_long, file = "data_long.RData")
+save(data_wide, file = "data_wide.RData")
+
+```
+
+## 4. Data analysis
+
+```{r}
+
+## Overall change in time of log number of cases
+
+data_long$log.confirmed_cases<- log((data_long$confirmed_cases+1), base = exp(1))
+
+png(file = "overall_change.png")
+overall_change <- data_long %>% 
+    ggplot(aes(x = date, y = log.confirmed_cases)) +
+    stat_summary(fun.y = mean,
+                 geom = "line") + 
+    theme_bw() +
+    labs(x = "Date", y = "Log number of cases",
+         title = "Overall change in time of log number of cases",
+         caption = "Data: JHU CSSE COVID-19 Dataset")
+print(overall_change)
+dev.off()
+
+
+## Change in time of log number of cases by country
+
+png(file = "change_by_country.png")
+change_by_country <- data_long %>% 
+    filter(country == c("US", "Brazil", "Russia",
+                        "Iran","United Kingdom", "Germany",
+                        "Italy", "Spain", "China")) %>% 
+    ggplot(aes(x = date, y = log.confirmed_cases)) +
+    stat_summary(fun.y = mean,
+                 geom = "line") + 
+    theme_bw()+
+    facet_wrap(~country)
+    labs(x = "Date", y = "Log number of cases",
+         title = "Overall change in time of log number of cases by country",
+         caption = "Data: JHU CSSE COVID-19 Dataset")
+print(change_by_country)
+dev.off()
+
+## Change in time of rate of infection per 100,000 cases
+
+data_long$total_population <- ifelse(is.na(data_long$state), NA, data_long$population)
+
+data_long$infection_rate <- data_long$confirmed_cases/data_long$total_population*100000 ## Calculate infection rate
+
+
+png(file = "infection_rate_graph.png")
+infection_rate_graph <- data_long %>% 
+    filter(country == c("US", "Brazil", "Russia",
+                        "Iran","United Kingdom", "Germany",
+                        "Italy", "Spain", "China")) %>% 
+    ggplot(aes(x = date, y = infection_rate)) +
+    stat_summary(fun.y = mean,
+                 geom = "line") +
+    facet_wrap(~country)+
+    scale_y_continuous(labels = scales::number_format(accuracy = 1)) +
+    theme_bw() +
+    labs(x = "Date", y = "Infection rate (per 100,000 people)",
+         title = "Change in time of infection rate by country",
+         caption = "Data: JHU CSSE COVID-19 Dataset. Infection rate per 100,000 people")
+print(infection_rate_graph)
+dev.off()
+
+```
 
